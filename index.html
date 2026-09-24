@@ -131,6 +131,7 @@ thead th{font-size:12px;color:#fff;background:var(--teal);font-weight:700}
 thead th:first-child{border-radius:6px 0 0 0}thead th:last-child{border-radius:0 6px 0 0}
 tfoot td{font-weight:900;background:var(--teal-soft);border-bottom:none}
 tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--panel) 45%,transparent)}
+tr.subtotal td{background:var(--teal-soft)!important;color:var(--teal-deep);font-weight:700;font-size:13px}
 td.zero{color:var(--muted);opacity:.5}
 .sticky td:first-child,.sticky th:first-child{position:sticky;left:0;z-index:1}
 .sticky td:first-child{background:var(--card)}
@@ -327,7 +328,8 @@ footer{background:#2b3332;color:#b9c4c3;font-size:12px;text-align:center;padding
 
 <script>
 const KEY='family-ledger-v1';
-const DEFAULT_CATS=['房貸','水費','電費','瓦斯費','電話/網路','管理費','保險','伙食','交通','教育','醫療','娛樂','其他'];
+const REQUIRED=['房貸','水費','電費-電表1','電費-電表2'];
+const DEFAULT_CATS=['房貸','水費','電費-電表1','電費-電表2','瓦斯費','電話/網路','管理費','保險','伙食','交通','教育','醫療','娛樂','其他'];
 const P={
   home:'M3 11 12 4l9 7M5 9.5V20h5v-6h4v6h5V9.5',
   drop:'M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z',
@@ -350,10 +352,20 @@ const P={
   pen:'M4 20h4L19 9l-4-4L4 16zM13 7l4 4'
 };
 const svg=n=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${P[n]}"/></svg>`;
-const CAT_ICON={'房貸':'home','水費':'drop','電費':'bolt','瓦斯費':'flame','電話/網路':'wifi','管理費':'building','保險':'shield','伙食':'bowl','交通':'car','教育':'book','醫療':'med','娛樂':'film','其他':'box'};
-const icon=c=>svg(CAT_ICON[c]||'tag');
+const CAT_ICON={'房貸':'home','水費':'drop','瓦斯費':'flame','電話/網路':'wifi','管理費':'building','保險':'shield','伙食':'bowl','交通':'car','教育':'book','醫療':'med','娛樂':'film','其他':'box'};
+const icon=c=>svg(CAT_ICON[c]||(c.startsWith('電費')?'bolt':'tag'));
 let db={cats:DEFAULT_CATS.slice(),items:[],fixed:[]};
 try{const s=localStorage.getItem(KEY);if(s)db=Object.assign(db,JSON.parse(s));}catch(e){}
+// 舊版的「電費」類別改為電表1、電表2；舊的「電費」記錄經確認後移除
+function splitMeters(){let changed=false;const i=db.cats.indexOf('電費');
+  if(i>=0){db.cats.splice(i,1,...['電費-電表1','電費-電表2'].filter(c=>!db.cats.includes(c)));changed=true;}
+  const old=db.items.filter(x=>x.cat==='電費');
+  if(old.length&&!db.elecAsked){db.elecAsked=true;changed=true;if(confirm(`電費已改為「電表1」「電表2」分開記錄。\n要移除舊的「電費」記錄嗎？共 ${old.length} 筆，合計 $${old.reduce((a,x)=>a+x.amount,0).toLocaleString()}\n\n（按「取消」會保留，之後可在明細中編輯分到電表）`))db.items=db.items.filter(x=>x.cat!=='電費');}
+  const f=db.fixed.length;db.fixed=db.fixed.filter(x=>x.cat!=='電費');if(db.fixed.length!==f)changed=true;
+  // 固定類別：房貸、水費、電表1、電表2 一定存在
+  REQUIRED.slice().reverse().forEach(c=>{if(!db.cats.includes(c)){db.cats.unshift(c);changed=true;}});
+  return changed;}
+if(splitMeters())save();
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){alert('無法儲存，請記得使用「備份」');}};
 const $=id=>document.getElementById(id);
 const fmt=n=>'$'+Math.round(n).toLocaleString('zh-TW');
@@ -423,8 +435,11 @@ function render(){
   // year grid
   const cats=[...db.cats,...Object.keys(grid).filter(c=>!db.cats.includes(c))];
   let h='<table><thead><tr><th>類別</th>'+Array.from({length:12},(_,i)=>`<th>${i+1}月</th>`).join('')+'<th>合計</th></tr></thead><tbody>';
+  const elec=cats.filter(c=>c.startsWith('電費-')), lastElec=elec[elec.length-1];
   cats.forEach(c=>{const r=grid[c]||Array(12).fill(0);const s=r.reduce((a,b)=>a+b,0);
-    h+=`<tr><td>${icon(c)} ${esc(c)}</td>${r.map((v,i)=>v?`<td><button class="lnk num" data-cell="${esc(c)}|${i+1}" title="查看／修改明細">${v.toLocaleString()}</button></td>`:'<td class="zero">–</td>').join('')}<td><b>${s?s.toLocaleString():'–'}</b></td></tr>`;});
+    h+=`<tr><td>${icon(c)} ${esc(c)}</td>${r.map((v,i)=>v?`<td><button class="lnk num" data-cell="${esc(c)}|${i+1}" title="查看／修改明細">${v.toLocaleString()}</button></td>`:'<td class="zero">–</td>').join('')}<td><b>${s?s.toLocaleString():'–'}</b></td></tr>`;
+    if(c===lastElec&&elec.length>1){const t=Array.from({length:12},(_,i)=>elec.reduce((a,e)=>a+((grid[e]||[])[i]||0),0));const ts=t.reduce((a,b)=>a+b,0);
+      h+=`<tr class="subtotal"><td>${svg('bolt')} 電費小計</td>${t.map(v=>`<td>${v?v.toLocaleString():'–'}</td>`).join('')}<td>${ts?ts.toLocaleString():'–'}</td></tr>`;}});
   h+=`</tbody><tfoot><tr><td>合計</td>${byM.map(v=>`<td>${v.toLocaleString()}</td>`).join('')}<td>${total.toLocaleString()}</td></tr></tfoot></table>`;
   $('yearTable').innerHTML=h;
 
@@ -446,7 +461,7 @@ function render(){
   $('fixedList').innerHTML=db.fixed.length?db.fixed.map(f=>`<div class="item"><span>${icon(f.cat)} ${esc(f.cat)} · 每月 ${f.day} 號</span><b>${fmt(f.amount)}</b><button class="lnk del" data-fdel="${f.id}">移除</button></div>`).join('')+`<div class="item"><span class="muted">每月固定合計</span><b>${fmt(fixedSum)}</b><span style="flex:0 0 42px"></span></div>`:'<p class="muted center">尚未設定固定支出</p>';
 
   // cats
-  $('catList').innerHTML=db.cats.map((c,i)=>`<div class="item"><span>${icon(c)} ${esc(c)}</span><button class="lnk" data-up="${i}" title="上移">↑</button><button class="lnk del" data-cdel="${i}">刪除</button></div>`).join('');
+  $('catList').innerHTML=db.cats.map((c,i)=>`<div class="item"><span>${icon(c)} ${esc(c)}</span><button class="lnk" data-up="${i}" title="上移">↑</button>${REQUIRED.includes(c)?'<span class="muted" style="flex:0 0 auto;padding:0 4px">固定</span>':`<button class="lnk del" data-cdel="${i}">刪除</button>`}</div>`).join('');
 }
 
 function showTab(t){document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));document.querySelectorAll('[data-p]').forEach(p=>p.classList.toggle('hide',p.dataset.p!==t));}
@@ -465,9 +480,9 @@ document.addEventListener('click',e=>{const el=e.target.closest('button');if(!el
   if(d.qc){$('fCat').value=d.qc;renderCircles();$('fAmt').focus();}
   if(d.cell){const [c,m]=d.cell.split('|');$('lCat').value=c;$('lMonth').value=m;showTab('list');render();}
   if(d.del)delItem(d.del);
-  if(d.edit){const x=db.items.find(i=>i.id===d.edit);editing=x.id;$('fDate').value=x.date;if(!db.cats.includes(x.cat))db.cats.push(x.cat);render();$('fCat').value=x.cat;renderCircles();$('fAmt').value=x.amount;$('fNote').value=x.note||'';$('formTitle').classList.remove('hide');$('fSubmit').textContent='儲存修改';$('fCancel').classList.remove('hide');$('fDelete').classList.remove('hide');$('add').scrollIntoView({behavior:'smooth'});$('fAmt').focus({preventScroll:true});}
+  if(d.edit){const x=db.items.find(i=>i.id===d.edit);editing=x.id;$('fDate').value=x.date;render();if(!db.cats.includes(x.cat))$('fCat').insertAdjacentHTML('beforeend',`<option value="${esc(x.cat)}">${esc(x.cat)}</option>`);$('fCat').value=x.cat;renderCircles();$('fAmt').value=x.amount;$('fNote').value=x.note||'';$('formTitle').classList.remove('hide');$('fSubmit').textContent='儲存修改';$('fCancel').classList.remove('hide');$('fDelete').classList.remove('hide');$('add').scrollIntoView({behavior:'smooth'});$('fAmt').focus({preventScroll:true});}
   if(d.fdel){db.fixed=db.fixed.filter(f=>f.id!==d.fdel);save();render();}
-  if(d.cdel){const c=db.cats[+d.cdel];if(confirm(`刪除類別「${c}」？（既有記錄會保留）`)){db.cats.splice(+d.cdel,1);save();render();}}
+  if(d.cdel){const c=db.cats[+d.cdel];if(!REQUIRED.includes(c)&&confirm(`刪除類別「${c}」？（既有記錄會保留）`)){db.cats.splice(+d.cdel,1);save();render();}}
   if(d.up&&+d.up>0){const i=+d.up;[db.cats[i-1],db.cats[i]]=[db.cats[i],db.cats[i-1]];save();render();}
 });
 
@@ -488,7 +503,7 @@ $('exportCsv').onclick=()=>{const rows=[['日期','類別','金額','備註'],..
   download(`家庭支出_${year}.csv`,'﻿'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n'),'text/csv');};
 $('backup').onclick=()=>download(`家庭記帳備份_${todayStr}.json`,JSON.stringify(db,null,1),'application/json');
 $('restoreBtn').onclick=()=>$('restore').click();
-$('restore').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!Array.isArray(d.items))throw 0;if(confirm(`還原備份（${d.items.length} 筆記錄）？目前資料將被取代。`)){db={cats:d.cats||DEFAULT_CATS.slice(),items:d.items,fixed:d.fixed||[]};save();render();}}catch(_){alert('檔案格式不正確');}e.target.value='';});};
+$('restore').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!Array.isArray(d.items))throw 0;if(confirm(`還原備份（${d.items.length} 筆記錄）？目前資料將被取代。`)){db={cats:d.cats||DEFAULT_CATS.slice(),items:d.items,fixed:d.fixed||[],elecAsked:d.elecAsked};splitMeters();save();render();}}catch(_){alert('檔案格式不正確');}e.target.value='';});};
 
 $('navPen').innerHTML=svg('pen');$('phoneHome').innerHTML=svg('home');
 resetForm();render();

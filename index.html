@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>家庭年度記帳</title>
+<style>
+:root{
+  --bg:#f6f5f2;--surface:#fff;--surface2:#f0eee9;--text:#1f1d1a;--muted:#6b675f;
+  --border:#e3e0d8;--accent:#2f6f5e;--accent-soft:#e3efe9;--danger:#b4432f;--bar:#2f6f5e;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#161614;--surface:#201f1c;--surface2:#2a2925;--text:#ecebe6;--muted:#a19d93;
+  --border:#35332e;--accent:#6fbfa6;--accent-soft:#1f3530;--danger:#e0806c;--bar:#6fbfa6;
+}}
+:root[data-theme="dark"]{
+  --bg:#161614;--surface:#201f1c;--surface2:#2a2925;--text:#ecebe6;--muted:#a19d93;
+  --border:#35332e;--accent:#6fbfa6;--accent-soft:#1f3530;--danger:#e0806c;--bar:#6fbfa6;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 -apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif}
+.wrap{max-width:1100px;margin:0 auto;padding:20px 16px 60px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:12px;justify-content:space-between;margin-bottom:16px}
+h1{font-size:22px;margin:0}
+h2{font-size:16px;margin:0 0 12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
+label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:4px}
+input,select,button{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:7px 10px}
+input[type=number]{width:130px}
+button{cursor:pointer;background:var(--surface2)}
+button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+:root[data-theme="dark"] button.primary{color:#10201b}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) button.primary{color:#10201b}}
+button.link{background:none;border:none;color:var(--accent);padding:2px 6px}
+button.link.del{color:var(--danger)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px}
+.stat .k{font-size:12px;color:var(--muted)}.stat .v{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+.tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.tabs button.on{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:6px 8px;border-bottom:1px solid var(--border);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--surface)}
+thead th{font-size:12px;color:var(--muted);font-weight:500}
+tfoot td{font-weight:600}
+td.zero{color:var(--muted);opacity:.5}
+.chart{display:flex;align-items:end;gap:6px;height:180px;padding-top:20px}
+.chart .col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:end;height:100%;min-width:0}
+.chart .b{width:100%;max-width:44px;background:var(--bar);border-radius:4px 4px 0 0;min-height:1px}
+.chart .n{font-size:10px;color:var(--muted);margin-bottom:2px;white-space:nowrap}
+.chart .m{font-size:12px;color:var(--muted);margin-top:4px}
+.cats .line{display:grid;grid-template-columns:90px 1fr 110px;gap:8px;align-items:center;margin:6px 0;font-size:14px}
+.cats .track{background:var(--surface2);border-radius:4px;height:12px;overflow:hidden}
+.cats .fill{background:var(--bar);height:100%}
+.cats .amt{text-align:right;font-variant-numeric:tabular-nums}
+.muted{color:var(--muted);font-size:13px}
+.hide{display:none}
+.fixed-item{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--border)}
+.fixed-item span{flex:1}
+@media (max-width:600px){input[type=number]{width:100%}.row>label{flex:1 1 45%}.cats .line{grid-template-columns:70px 1fr 90px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🏠 家庭年度記帳</h1>
+    <div class="row">
+      <label>年份<select id="year"></select></label>
+      <button id="exportCsv">匯出 CSV</button>
+      <button id="backup">備份</button>
+      <button id="restoreBtn">還原</button>
+      <input type="file" id="restore" accept=".json" class="hide">
+    </div>
+  </header>
+
+  <div class="card">
+    <h2 id="formTitle">新增支出</h2>
+    <form id="form" class="row">
+      <label>日期<input type="date" id="fDate" required></label>
+      <label>類別<select id="fCat"></select></label>
+      <label>金額<input type="number" id="fAmt" min="0" step="1" required placeholder="0"></label>
+      <label style="flex:1;min-width:160px">備註<input id="fNote" placeholder="例：8月帳單"></label>
+      <button class="primary" type="submit" id="fSubmit">新增</button>
+      <button type="button" id="fCancel" class="hide">取消</button>
+      <button type="button" id="fDelete" class="hide" style="color:var(--danger)">刪除這筆</button>
+    </form>
+    <h2 style="margin-top:18px">最近記錄 <span class="muted" style="font-weight:400">（點「編輯」修改，或到「明細」查看全部）</span></h2>
+    <div class="scroll" id="recent"></div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="tabs" id="tabs">
+    <button data-t="year" class="on">年度總表</button>
+    <button data-t="chart">圖表</button>
+    <button data-t="list">明細</button>
+    <button data-t="fixed">固定支出</button>
+    <button data-t="cats">類別設定</button>
+  </div>
+
+  <div class="card" data-p="year"><h2>各月份 × 類別</h2><div class="scroll" id="yearTable"></div></div>
+
+  <div class="card hide" data-p="chart">
+    <h2>每月支出</h2><div class="chart" id="barChart"></div>
+    <h2 style="margin-top:24px">類別占比</h2><div class="cats" id="catChart"></div>
+  </div>
+
+  <div class="card hide" data-p="list">
+    <div class="row" style="margin-bottom:10px">
+      <label>月份<select id="lMonth"></select></label>
+      <label>類別<select id="lCat"></select></label>
+    </div>
+    <div class="scroll" id="list"></div>
+  </div>
+
+  <div class="card hide" data-p="fixed">
+    <h2>每月固定支出</h2>
+    <p class="muted">設定每月都會有的支出（如房貸、管理費），再按「產生」一次新增到指定月份，之後可到明細修改實際金額。</p>
+    <form id="fixedForm" class="row" style="margin-bottom:12px">
+      <label>類別<select id="xCat"></select></label>
+      <label>金額<input type="number" id="xAmt" min="0" required></label>
+      <label>每月幾號<input type="number" id="xDay" min="1" max="28" value="5" style="width:80px"></label>
+      <button type="submit">加入</button>
+    </form>
+    <div id="fixedList"></div>
+    <div class="row" style="margin-top:14px">
+      <label>產生到<select id="genMonth"></select></label>
+      <button class="primary" id="genBtn">產生固定支出</button>
+      <button id="genYear">產生全年 12 個月</button>
+    </div>
+  </div>
+
+  <div class="card hide" data-p="cats">
+    <h2>類別</h2>
+    <form id="catForm" class="row" style="margin-bottom:12px">
+      <label>新類別<input id="newCat" required></label><button type="submit">新增</button>
+    </form>
+    <div id="catList"></div>
+  </div>
+
+  <p class="muted">資料儲存在這台電腦的瀏覽器中。建議定期按「備份」下載 JSON 檔，換電腦或清除瀏覽器資料時可用「還原」匯回。</p>
+</div>
+
+<script>
+const KEY='family-ledger-v1';
+const DEFAULT_CATS=['房貸','水費','電費','瓦斯費','電話/網路','管理費','保險','伙食','交通','教育','醫療','娛樂','其他'];
+let db={cats:DEFAULT_CATS.slice(),items:[],fixed:[]};
+try{const s=localStorage.getItem(KEY);if(s)db=Object.assign(db,JSON.parse(s));}catch(e){}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){alert('無法儲存，請記得使用「備份」');}};
+const $=id=>document.getElementById(id);
+const fmt=n=>'$'+Math.round(n).toLocaleString('zh-TW');
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const pad=n=>String(n).padStart(2,'0');
+const today=new Date();
+let year=today.getFullYear(), editing=null;
+
+function opts(sel,list,val){sel.innerHTML=list.map(([v,t])=>`<option value="${esc(v)}">${esc(t)}</option>`).join('');if(val!=null)sel.value=val;}
+const monthOpts=(all)=>[...(all?[['','全部月份']]:[]),...Array.from({length:12},(_,i)=>[String(i+1),(i+1)+' 月'])];
+
+function yearItems(){return db.items.filter(x=>x.date.startsWith(year+'-'));}
+
+function refreshSelects(){
+  const years=new Set([today.getFullYear(),year,...db.items.map(x=>+x.date.slice(0,4))]);
+  opts($('year'),[...years].sort((a,b)=>b-a).map(y=>[y,y+' 年']),year);
+  const cats=db.cats.map(c=>[c,c]);
+  opts($('fCat'),cats,$('fCat').value||db.cats[0]);
+  opts($('xCat'),cats,$('xCat').value||db.cats[0]);
+  opts($('lCat'),[['','全部類別'],...cats],$('lCat').value);
+  opts($('lMonth'),monthOpts(true),$('lMonth').value);
+  opts($('genMonth'),monthOpts(false),$('genMonth').value||String(today.getMonth()+1));
+}
+
+function render(){
+  refreshSelects();
+  const items=yearItems();
+  const byM=Array(12).fill(0), byC={}, grid={};
+  items.forEach(x=>{const m=+x.date.slice(5,7)-1;byM[m]+=x.amount;byC[x.cat]=(byC[x.cat]||0)+x.amount;(grid[x.cat]??=Array(12).fill(0))[m]+=x.amount;});
+  const total=byM.reduce((a,b)=>a+b,0);
+  const active=byM.filter(v=>v>0).length;
+  const curM=year===today.getFullYear()?byM[today.getMonth()]:null;
+  const topC=Object.entries(byC).sort((a,b)=>b[1]-a[1])[0];
+  $('stats').innerHTML=[
+    ['全年總支出',fmt(total)],
+    ['月平均（有記錄月份）',fmt(active?total/active:0)],
+    curM!=null?['本月支出',fmt(curM)]:['記錄筆數',items.length+' 筆'],
+    ['最大類別',topC?`${esc(topC[0])} ${fmt(topC[1])}`:'—']
+  ].map(([k,v])=>`<div class="stat"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+
+  // year grid
+  const cats=[...db.cats,...Object.keys(grid).filter(c=>!db.cats.includes(c))];
+  let h='<table><thead><tr><th>類別</th>'+Array.from({length:12},(_,i)=>`<th>${i+1}月</th>`).join('')+'<th>合計</th></tr></thead><tbody>';
+  cats.forEach(c=>{const r=grid[c]||Array(12).fill(0);const s=r.reduce((a,b)=>a+b,0);
+    h+=`<tr><td>${esc(c)}</td>${r.map((v,i)=>v?`<td><button class="link" style="padding:0" data-cell="${esc(c)}|${i+1}" title="查看／修改明細">${v.toLocaleString()}</button></td>`:'<td class="zero">–</td>').join('')}<td>${s?s.toLocaleString():'–'}</td></tr>`;});
+  h+=`</tbody><tfoot><tr><td>合計</td>${byM.map(v=>`<td>${v.toLocaleString()}</td>`).join('')}<td>${total.toLocaleString()}</td></tr></tfoot></table>`;
+  $('yearTable').innerHTML=h;
+
+  // bar chart
+  const max=Math.max(...byM,1);
+  $('barChart').innerHTML=byM.map((v,i)=>`<div class="col" title="${i+1}月 ${fmt(v)}"><div class="n">${v?(v>=10000?(v/10000).toFixed(1)+'萬':v.toLocaleString()):''}</div><div class="b" style="height:${v/max*100}%"></div><div class="m">${i+1}</div></div>`).join('');
+  const cs=Object.entries(byC).sort((a,b)=>b[1]-a[1]);
+  $('catChart').innerHTML=cs.length?cs.map(([c,v])=>`<div class="line"><span>${esc(c)}</span><div class="track"><div class="fill" style="width:${v/cs[0][1]*100}%"></div></div><span class="amt">${fmt(v)} · ${(v/total*100).toFixed(0)}%</span></div>`).join(''):'<p class="muted">今年尚無資料</p>';
+
+  // list
+  const fm=$('lMonth').value, fc=$('lCat').value;
+  const rows=items.filter(x=>(!fm||+x.date.slice(5,7)===+fm)&&(!fc||x.cat===fc)).sort((a,b)=>b.date.localeCompare(a.date));
+  const sum=rows.reduce((a,x)=>a+x.amount,0);
+  $('list').innerHTML=rows.length?itemTable(rows)+`<p class="muted">共 ${rows.length} 筆，合計 ${fmt(sum)}</p>`:'<p class="muted">沒有符合的記錄</p>';
+  const recent=db.items.slice().sort((a,b)=>b.date.localeCompare(a.date)||b.id.localeCompare(a.id)).slice(0,5);
+  $('recent').innerHTML=recent.length?itemTable(recent):'<p class="muted">還沒有記錄</p>';
+
+  // fixed
+  $('fixedList').innerHTML=db.fixed.length?db.fixed.map(f=>`<div class="fixed-item"><span>${esc(f.cat)} · 每月 ${f.day} 號</span><b>${fmt(f.amount)}</b><button class="link del" data-fdel="${f.id}">移除</button></div>`).join('')+`<div class="fixed-item"><span class="muted">每月固定合計</span><b>${fmt(db.fixed.reduce((a,f)=>a+f.amount,0))}</b><span style="flex:0;width:40px"></span></div>`:'<p class="muted">尚未設定固定支出</p>';
+
+  // cats
+  $('catList').innerHTML=db.cats.map((c,i)=>`<div class="fixed-item"><span>${esc(c)}</span><button class="link" data-up="${i}">↑</button><button class="link del" data-cdel="${i}">刪除</button></div>`).join('');
+}
+
+function itemTable(rows){
+  return `<table><thead><tr><th>日期</th><th style="text-align:left">類別</th><th>金額</th><th style="text-align:left">備註</th><th></th></tr></thead><tbody>${rows.map(x=>`<tr${x.id===editing?' style="background:var(--accent-soft)"':''}><td>${x.date}</td><td style="text-align:left">${esc(x.cat)}</td><td>${x.amount.toLocaleString()}</td><td style="text-align:left;white-space:normal">${esc(x.note||'')}</td><td><button class="link" data-edit="${x.id}">編輯</button><button class="link del" data-del="${x.id}">刪除</button></td></tr>`).join('')}</tbody></table>`;
+}
+function showTab(t){document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));document.querySelectorAll('[data-p]').forEach(p=>p.classList.toggle('hide',p.dataset.p!==t));}
+function delItem(id){const x=db.items.find(i=>i.id===id);if(!x||!confirm(`確定刪除這筆記錄？\n${x.date}  ${x.cat}  ${fmt(x.amount)}`))return;db.items=db.items.filter(i=>i.id!==id);if(editing===id)resetForm();save();render();}
+
+// form
+function resetForm(){editing=null;$('fDelete').classList.add('hide');$('form').reset();$('fDate').value=year===today.getFullYear()?today.toISOString().slice(0,10):`${year}-01-01`;$('formTitle').textContent='新增支出';$('fSubmit').textContent='新增';$('fCancel').classList.add('hide');}
+$('form').onsubmit=e=>{e.preventDefault();
+  const rec={date:$('fDate').value,cat:$('fCat').value,amount:Math.abs(+$('fAmt').value)||0,note:$('fNote').value.trim()};
+  if(editing){Object.assign(db.items.find(x=>x.id===editing),rec);}else db.items.push({id:uid(),...rec});
+  save();const y=+rec.date.slice(0,4);if(y!==year)year=y;resetForm();render();$('fAmt').focus();};
+$('fCancel').onclick=()=>{resetForm();render();};
+$('fDelete').onclick=()=>{if(editing)delItem(editing);};
+
+document.addEventListener('click',e=>{const d=e.target.dataset;if(!d)return;
+  if(d.t)showTab(d.t);
+  if(d.cell){const [c,m]=d.cell.split('|');$('lCat').value=c;$('lMonth').value=m;showTab('list');render();}
+  if(d.del)delItem(d.del);
+  if(d.edit){const x=db.items.find(i=>i.id===d.edit);editing=x.id;$('fDate').value=x.date;$('fCat').value=x.cat;$('fAmt').value=x.amount;$('fNote').value=x.note||'';$('formTitle').textContent='編輯支出';$('fSubmit').textContent='儲存修改';$('fCancel').classList.remove('hide');$('fDelete').classList.remove('hide');render();window.scrollTo({top:0,behavior:'smooth'});$('fAmt').focus();}
+  if(d.fdel){db.fixed=db.fixed.filter(f=>f.id!==d.fdel);save();render();}
+  if(d.cdel){const c=db.cats[+d.cdel];if(confirm(`刪除類別「${c}」？（既有記錄會保留）`)){db.cats.splice(+d.cdel,1);save();render();}}
+  if(d.up&&+d.up>0){const i=+d.up;[db.cats[i-1],db.cats[i]]=[db.cats[i],db.cats[i-1]];save();render();}
+});
+
+$('year').onchange=e=>{year=+e.target.value;resetForm();render();};
+$('lMonth').onchange=$('lCat').onchange=render;
+
+$('fixedForm').onsubmit=e=>{e.preventDefault();db.fixed.push({id:uid(),cat:$('xCat').value,amount:+$('xAmt').value,day:Math.min(28,Math.max(1,+$('xDay').value||1))});save();$('xAmt').value='';render();};
+function genMonth(m){let added=0;db.fixed.forEach(f=>{const date=`${year}-${pad(m)}-${pad(f.day)}`;
+  if(db.items.some(x=>x.fixedId===f.id&&x.date.slice(0,7)===date.slice(0,7)))return;
+  db.items.push({id:uid(),date,cat:f.cat,amount:f.amount,note:'固定支出',fixedId:f.id});added++;});return added;}
+$('genBtn').onclick=()=>{if(!db.fixed.length)return alert('請先加入固定支出');const n=genMonth(+$('genMonth').value);save();render();alert(n?`已新增 ${n} 筆`:'這個月已經產生過了');};
+$('genYear').onclick=()=>{if(!db.fixed.length)return alert('請先加入固定支出');if(!confirm(`為 ${year} 年 1–12 月全部產生固定支出？（已產生過的月份會略過）`))return;let n=0;for(let m=1;m<=12;m++)n+=genMonth(m);save();render();alert(`已新增 ${n} 筆`);};
+
+$('catForm').onsubmit=e=>{e.preventDefault();const c=$('newCat').value.trim();if(c&&!db.cats.includes(c))db.cats.push(c);$('newCat').value='';save();render();};
+
+function download(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
+$('exportCsv').onclick=()=>{const rows=[['日期','類別','金額','備註'],...yearItems().sort((a,b)=>a.date.localeCompare(b.date)).map(x=>[x.date,x.cat,x.amount,x.note||''])];
+  download(`家庭支出_${year}.csv`,'﻿'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n'),'text/csv');};
+$('backup').onclick=()=>download(`家庭記帳備份_${today.toISOString().slice(0,10)}.json`,JSON.stringify(db,null,1),'application/json');
+$('restoreBtn').onclick=()=>$('restore').click();
+$('restore').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!Array.isArray(d.items))throw 0;if(confirm(`還原備份（${d.items.length} 筆記錄）？目前資料將被取代。`)){db={cats:d.cats||DEFAULT_CATS.slice(),items:d.items,fixed:d.fixed||[]};save();render();}}catch(_){alert('檔案格式不正確');}e.target.value='';});};
+
+resetForm();render();
+</script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function isMember(ledgerId) {
+      return signedIn() &&
+        request.auth.token.email in get(/databases/$(database)/documents/ledgers/$(ledgerId)).data.members;
+    }
+
+    // 帳本：只有 members 名單中的 Google 帳號可以讀寫
+    match /ledgers/{ledgerId} {
+      allow read: if signedIn() && request.auth.token.email in resource.data.members;
+      allow create: if signedIn() && ledgerId == request.auth.uid
+        && request.resource.data.owner == request.auth.token.email
+        && request.resource.data.members == [request.auth.token.email];
+      // 成員可更新類別、固定支出與成員名單，但不能更換建立者，也不能把建立者移出
+      allow update: if signedIn() && request.auth.token.email in resource.data.members
+        && request.resource.data.owner == resource.data.owner
+        && resource.data.owner in request.resource.data.members;
+      allow delete: if false;
+
+      // 記帳明細
+      match /items/{itemId} {
+        allow read, write: if isMember(ledgerId);
+      }
+    }
+  }
+}

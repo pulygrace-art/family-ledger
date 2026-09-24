@@ -36,12 +36,22 @@ nav .in{display:flex;align-items:stretch;gap:0;height:52px}
 .brand{display:flex;align-items:center;gap:8px;padding:0 16px;font-weight:900;font-size:17px;color:var(--teal-deep);text-decoration:none;letter-spacing:.05em}
 .brand svg{width:28px;height:28px}
 .links{display:flex;align-items:center;font-size:13px;flex:1}
-.links a{color:var(--ink);text-decoration:none;padding:0 12px;border-left:1px solid var(--line);line-height:1}
+.links a{color:var(--ink);text-decoration:none;white-space:nowrap;padding:0 12px;border-left:1px solid var(--line);line-height:1}
 .links a:first-child{border:none}
 .tools{display:flex;gap:6px;align-items:center;padding:0 10px}
 .tools select{padding:4px 8px;font-size:13px}
 .tbtn{font-size:13px;padding:4px 10px;color:var(--muted)}
 .tbtn:hover{color:var(--teal-deep)}
+.tbtn.sync{display:inline-flex;align-items:center;gap:4px;font-weight:700;color:var(--teal-deep)}
+.tbtn.sync.off{color:var(--muted)}
+.tbtn.sync.err{color:var(--danger)}
+.tbtn.sync .ic{width:17px;height:17px}
+.sync-box{text-align:center;padding:8px 0}
+.sync-box .ic{width:40px;height:40px;color:var(--teal-deep)}
+.sync-box h4{margin:6px 0 4px;font-size:18px}
+.member{display:flex;gap:10px;align-items:center;padding:9px 4px;border-bottom:1px solid var(--line)}
+.member span{flex:1;word-break:break-all}
+.pill{font-size:11px;font-weight:700;padding:1px 8px;border-radius:999px;background:var(--teal-soft);color:var(--teal-deep)}
 .navcta{display:flex;align-items:center;gap:6px;background:var(--teal);color:#fff;font-weight:700;padding:0 20px;text-decoration:none;font-size:14px}
 
 /* hero */
@@ -169,8 +179,8 @@ tr.editing td{background:#fff6cf!important;color:#333}
 
 footer{background:#2b3332;color:#b9c4c3;font-size:12px;text-align:center;padding:18px 16px}
 
+@media (max-width:980px){.links{display:none}}
 @media (max-width:760px){
-  .links{display:none}
   .navcta{padding:0 12px}
   .tools .tbtn{padding:4px 6px}
   .hero .wrap{grid-template-columns:1fr;padding-top:26px}
@@ -196,6 +206,7 @@ footer{background:#2b3332;color:#b9c4c3;font-size:12px;text-align:center;padding
   </div>
   <div class="tools">
     <select id="year" aria-label="年份"></select>
+    <button class="tbtn sync" id="syncBtn" data-t="sync" title="雲端同步"></button>
     <button class="tbtn" id="exportCsv">CSV</button>
     <button class="tbtn" id="backup">備份</button>
     <button class="tbtn" id="restoreBtn">還原</button>
@@ -274,6 +285,7 @@ footer{background:#2b3332;color:#b9c4c3;font-size:12px;text-align:center;padding
         <button data-t="list">明細</button>
         <button data-t="fixed">固定支出</button>
         <button data-t="cats">類別設定</button>
+        <button data-t="sync">同步與共用</button>
       </div>
 
       <div data-p="year">
@@ -320,13 +332,27 @@ footer{background:#2b3332;color:#b9c4c3;font-size:12px;text-align:center;padding
         </form>
         <div id="catList" style="max-width:480px;margin:0 auto"></div>
       </div>
+
+      <div data-p="sync" class="hide">
+        <div id="syncPanel" style="max-width:560px;margin:0 auto"></div>
+      </div>
     </div>
   </div>
 </section>
 
-<footer>資料只儲存在這台裝置的瀏覽器中，請定期按「備份」下載 JSON 檔保存。</footer>
+<footer id="footNote">資料只儲存在這台裝置的瀏覽器中。登入雲端同步後，各裝置與家人可共用同一份帳本。</footer>
 
 <script>
+// ===== Firebase 設定（公開設定值，資料安全由 firestore.rules 保護）；設為 null 則只用本機儲存 =====
+window.FIREBASE_CONFIG={
+  apiKey:"AIzaSyB6dHWMuH0qHXZ17mYAitgXrf6K2Lw-wsc",
+  authDomain:"family-ledger-7c9c9.firebaseapp.com",
+  projectId:"family-ledger-7c9c9",
+  storageBucket:"family-ledger-7c9c9.firebasestorage.app",
+  messagingSenderId:"407148537626",
+  appId:"1:407148537626:web:5e57890d0b831ae1f9eea3"
+};
+
 const KEY='family-ledger-v1';
 const REQUIRED=['房貸','水費','電費-電表1','電費-電表2'];
 const DEFAULT_CATS=['房貸','水費','電費-電表1','電費-電表2','瓦斯費','電話/網路','管理費','保險','伙食','交通','教育','醫療','娛樂','其他'];
@@ -351,22 +377,12 @@ const P={
   trophy:'M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4M12 14v4M8 21h8M9 18h6',
   pen:'M4 20h4L19 9l-4-4L4 16zM13 7l4 4'
 };
+P.cloud='M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.6 8.5 4.75 4.75 0 0 1 17.25 18z';
+P.cloudOff='M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 17.6 8.5 4.75 4.75 0 0 1 17.25 18zM4 4l16 16';
+P.users='M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a6 6 0 0 1 6-6h2a6 6 0 0 1 6 6v1M16 3.5a4 4 0 0 1 0 7.5M19 14a5 5 0 0 1 3 5v2';
 const svg=n=>`<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${P[n]}"/></svg>`;
 const CAT_ICON={'房貸':'home','水費':'drop','瓦斯費':'flame','電話/網路':'wifi','管理費':'building','保險':'shield','伙食':'bowl','交通':'car','教育':'book','醫療':'med','娛樂':'film','其他':'box'};
 const icon=c=>svg(CAT_ICON[c]||(c.startsWith('電費')?'bolt':'tag'));
-let db={cats:DEFAULT_CATS.slice(),items:[],fixed:[]};
-try{const s=localStorage.getItem(KEY);if(s)db=Object.assign(db,JSON.parse(s));}catch(e){}
-// 舊版的「電費」類別改為電表1、電表2；舊的「電費」記錄經確認後移除
-function splitMeters(){let changed=false;const i=db.cats.indexOf('電費');
-  if(i>=0){db.cats.splice(i,1,...['電費-電表1','電費-電表2'].filter(c=>!db.cats.includes(c)));changed=true;}
-  const old=db.items.filter(x=>x.cat==='電費');
-  if(old.length&&!db.elecAsked){db.elecAsked=true;changed=true;if(confirm(`電費已改為「電表1」「電表2」分開記錄。\n要移除舊的「電費」記錄嗎？共 ${old.length} 筆，合計 $${old.reduce((a,x)=>a+x.amount,0).toLocaleString()}\n\n（按「取消」會保留，之後可在明細中編輯分到電表）`))db.items=db.items.filter(x=>x.cat!=='電費');}
-  const f=db.fixed.length;db.fixed=db.fixed.filter(x=>x.cat!=='電費');if(db.fixed.length!==f)changed=true;
-  // 固定類別：房貸、水費、電表1、電表2 一定存在
-  REQUIRED.slice().reverse().forEach(c=>{if(!db.cats.includes(c)){db.cats.unshift(c);changed=true;}});
-  return changed;}
-if(splitMeters())save();
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){alert('無法儲存，請記得使用「備份」');}};
 const $=id=>document.getElementById(id);
 const fmt=n=>'$'+Math.round(n).toLocaleString('zh-TW');
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -375,6 +391,32 @@ const pad=n=>String(n).padStart(2,'0');
 const today=new Date();
 const todayStr=`${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
 let year=today.getFullYear(), editing=null;
+
+// ===== 本機資料 =====
+function loadLocal(){const d={cats:DEFAULT_CATS.slice(),items:[],fixed:[]};try{const s=localStorage.getItem(KEY);if(s)Object.assign(d,JSON.parse(s));}catch(e){}return d;}
+function saveLocal(){try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){alert('無法儲存，請記得使用「備份」');}}
+function ensureRequired(){if(REQUIRED.every(c=>db.cats.includes(c)))return false;db.cats=[...REQUIRED,...db.cats.filter(c=>!REQUIRED.includes(c))];return true;}
+// 舊版的「電費」類別改為電表1、電表2；舊的「電費」記錄經確認後移除
+function splitMeters(){let changed=false;const i=db.cats.indexOf('電費');
+  if(i>=0){db.cats.splice(i,1,...['電費-電表1','電費-電表2'].filter(c=>!db.cats.includes(c)));changed=true;}
+  const old=db.items.filter(x=>x.cat==='電費');
+  if(old.length&&!db.elecAsked){db.elecAsked=true;changed=true;if(confirm(`電費已改為「電表1」「電表2」分開記錄。\n要移除舊的「電費」記錄嗎？共 ${old.length} 筆，合計 $${old.reduce((a,x)=>a+x.amount,0).toLocaleString()}\n\n（按「取消」會保留，之後可在明細中編輯分到電表）`))db.items=db.items.filter(x=>x.cat!=='電費');}
+  const f=db.fixed.length;db.fixed=db.fixed.filter(x=>x.cat!=='電費');if(db.fixed.length!==f)changed=true;
+  return ensureRequired()||changed;}
+let db=loadLocal();
+if(splitMeters())saveLocal();
+
+// ===== 資料寫入：未登入寫本機，登入後寫雲端（store.cloud 由下方 Firebase 模組設定）=====
+const store={
+  cloud:null,
+  add(list){if(!list.length)return;if(this.cloud)return this.cloud.add(list);db.items.push(...list);saveLocal();},
+  update(id,rec){if(this.cloud)return this.cloud.update(id,rec);const x=db.items.find(i=>i.id===id);if(x)Object.assign(x,rec);saveLocal();},
+  remove(ids){if(this.cloud)return this.cloud.remove(ids);db.items=db.items.filter(x=>!ids.includes(x.id));saveLocal();},
+  meta(){if(this.cloud)return this.cloud.meta();saveLocal();},
+  replace(d){if(this.cloud)return this.cloud.replace(d);db=d;saveLocal();}
+};
+function fail(e){console.error(e);alert('雲端寫入失敗：'+(e&&e.message||e));}
+function run(p){if(p&&p.catch)p.catch(fail);render();}
 
 function opts(sel,list,val){sel.innerHTML=list.map(([v,t])=>`<option value="${esc(v)}">${esc(t)}</option>`).join('');if(val!=null)sel.value=val;}
 const monthOpts=(all)=>[...(all?[['','全部月份']]:[]),...Array.from({length:12},(_,i)=>[String(i+1),(i+1)+' 月'])];
@@ -464,49 +506,156 @@ function render(){
   $('catList').innerHTML=db.cats.map((c,i)=>`<div class="item"><span>${icon(c)} ${esc(c)}</span><button class="lnk" data-up="${i}" title="上移">↑</button>${REQUIRED.includes(c)?'<span class="muted" style="flex:0 0 auto;padding:0 4px">固定</span>':`<button class="lnk del" data-cdel="${i}">刪除</button>`}</div>`).join('');
 }
 
+// ===== 同步狀態顯示 =====
+let cloud={status:window.FIREBASE_CONFIG?'loading':'none'};
+function cloudState(s){cloud=s;renderSync();}
+function renderSync(){
+  const b=$('syncBtn'), c=cloud;
+  const map={none:['cloudOff','本機','off'],out:['cloudOff','登入同步','off'],loading:['cloud','連線中…',''],on:['cloud',c.pending?'同步中…':'已同步',''],error:['cloudOff','同步錯誤','err']};
+  const [ic,label,cls]=map[c.status]||map.none;
+  b.className='tbtn sync '+cls;b.innerHTML=svg(ic)+`<span>${label}</span>`;
+  $('footNote').textContent=c.status==='on'?`已登入 ${c.email}，資料即時同步到雲端，所有裝置與家人共用同一份帳本。`:'資料只儲存在這台裝置的瀏覽器中。登入雲端同步後，各裝置與家人可共用同一份帳本。';
+  let h='';
+  if(c.status==='none'){
+    h=`<div class="sync-box">${svg('cloudOff')}<h4>尚未設定雲端同步</h4><p class="note">目前資料只存在這台裝置的瀏覽器，不同裝置之間不會同步。<br>需要先在程式中填入 Firebase 設定才能啟用。</p></div>`;
+  }else if(c.status==='out'){
+    h=`<div class="sync-box">${svg('cloud')}<h4>登入即可跨裝置同步</h4><p class="note">用 Google 帳號登入後，手機、電腦的記帳資料會即時同步，<br>也可以加入家人的 Gmail，一起記同一本帳。<br>第一次登入時，這台裝置上的記錄會一起上傳。</p><button class="btn" id="signInBtn">用 Google 帳號登入</button></div>`;
+  }else if(c.status==='loading'){
+    h=`<div class="sync-box">${svg('cloud')}<h4>連線中…</h4></div>`;
+  }else if(c.status==='error'){
+    h=`<div class="sync-box">${svg('cloudOff')}<h4>無法連線到雲端帳本</h4><p class="note">${esc(c.msg||'')}</p><button class="btn out" id="signOutBtn">登出</button></div>`;
+  }else{
+    const isOwner=c.owner===c.email;
+    h=`<div class="sync-box">${svg('cloud')}<h4>${c.pending?'同步中…':'已同步'}</h4><p class="note">登入帳號：${esc(c.email)}</p></div>
+      ${c.ledgers&&c.ledgers.length>1?`<div class="row" style="margin-bottom:14px"><label>使用的帳本<select id="ledgerSel">${c.ledgers.map(l=>`<option value="${esc(l.id)}"${l.id===c.ledgerId?' selected':''}>${esc(l.owner)} 的帳本</option>`).join('')}</select></label></div>`:''}
+      <p class="sub" style="margin-top:6px">${svg('users')} 共用成員</p>
+      <p class="note">加入家人的 Gmail，對方用該帳號登入後就會看到同一本帳</p>
+      ${(c.members||[]).map(m=>`<div class="member"><span>${esc(m)}</span>${m===c.owner?'<span class="pill">建立者</span>':''}${m===c.email?'<span class="pill">你</span>':''}${m!==c.owner&&(isOwner||m===c.email)?`<button class="lnk del" data-rmember="${esc(m)}">${m===c.email?'退出':'移除'}</button>`:''}</div>`).join('')}
+      <form id="memberForm" class="row" style="margin:14px 0 18px"><label>家人的 Gmail<input type="email" id="memberEmail" required placeholder="name@gmail.com" style="width:240px"></label><button class="btn teal" type="submit">加入</button></form>
+      <div class="center"><button class="btn out" id="signOutBtn">登出</button></div>`;
+  }
+  $('syncPanel').innerHTML=h;
+}
+
 function showTab(t){document.querySelectorAll('#tabs button').forEach(b=>b.classList.toggle('on',b.dataset.t===t));document.querySelectorAll('[data-p]').forEach(p=>p.classList.toggle('hide',p.dataset.p!==t));}
-function delItem(id){const x=db.items.find(i=>i.id===id);if(!x||!confirm(`確定刪除這筆記錄？\n${x.date}  ${x.cat}  ${fmt(x.amount)}`))return;db.items=db.items.filter(i=>i.id!==id);if(editing===id)resetForm();save();render();}
+function delItem(id){const x=db.items.find(i=>i.id===id);if(!x||!confirm(`確定刪除這筆記錄？\n${x.date}  ${x.cat}  ${fmt(x.amount)}`))return;if(editing===id)resetForm();run(store.remove([id]));}
 
 function resetForm(){editing=null;$('fDelete').classList.add('hide');$('form').reset();$('fDate').value=year===today.getFullYear()?todayStr:`${year}-01-01`;$('formTitle').classList.add('hide');$('fSubmit').textContent='新增這筆';$('fCancel').classList.add('hide');}
 $('form').onsubmit=e=>{e.preventDefault();
   const rec={date:$('fDate').value,cat:$('fCat').value,amount:Math.abs(+$('fAmt').value)||0,note:$('fNote').value.trim()};
-  if(editing){Object.assign(db.items.find(x=>x.id===editing),rec);}else db.items.push({id:uid(),...rec});
-  save();const y=+rec.date.slice(0,4);if(y!==year)year=y;const keepCat=rec.cat;resetForm();$('fCat').value=keepCat;render();$('fAmt').focus();};
+  const p=editing?store.update(editing,rec):store.add([{id:uid(),...rec}]);
+  const y=+rec.date.slice(0,4);if(y!==year)year=y;const keepCat=rec.cat;resetForm();$('fCat').value=keepCat;run(p);$('fAmt').focus();};
 $('fCancel').onclick=()=>{resetForm();render();};
 $('fDelete').onclick=()=>{if(editing)delItem(editing);};
 
 document.addEventListener('click',e=>{const el=e.target.closest('button');if(!el)return;const d=el.dataset;
-  if(d.t)showTab(d.t);
+  if(d.t){showTab(d.t);if(el.id==='syncBtn')$('tools').scrollIntoView({behavior:'smooth'});}
   if(d.qc){$('fCat').value=d.qc;renderCircles();$('fAmt').focus();}
   if(d.cell){const [c,m]=d.cell.split('|');$('lCat').value=c;$('lMonth').value=m;showTab('list');render();}
   if(d.del)delItem(d.del);
-  if(d.edit){const x=db.items.find(i=>i.id===d.edit);editing=x.id;$('fDate').value=x.date;render();if(!db.cats.includes(x.cat))$('fCat').insertAdjacentHTML('beforeend',`<option value="${esc(x.cat)}">${esc(x.cat)}</option>`);$('fCat').value=x.cat;renderCircles();$('fAmt').value=x.amount;$('fNote').value=x.note||'';$('formTitle').classList.remove('hide');$('fSubmit').textContent='儲存修改';$('fCancel').classList.remove('hide');$('fDelete').classList.remove('hide');$('add').scrollIntoView({behavior:'smooth'});$('fAmt').focus({preventScroll:true});}
-  if(d.fdel){db.fixed=db.fixed.filter(f=>f.id!==d.fdel);save();render();}
-  if(d.cdel){const c=db.cats[+d.cdel];if(!REQUIRED.includes(c)&&confirm(`刪除類別「${c}」？（既有記錄會保留）`)){db.cats.splice(+d.cdel,1);save();render();}}
-  if(d.up&&+d.up>0){const i=+d.up;[db.cats[i-1],db.cats[i]]=[db.cats[i],db.cats[i-1]];save();render();}
+  if(d.edit){const x=db.items.find(i=>i.id===d.edit);if(!x)return;editing=x.id;$('fDate').value=x.date;render();if(!db.cats.includes(x.cat))$('fCat').insertAdjacentHTML('beforeend',`<option value="${esc(x.cat)}">${esc(x.cat)}</option>`);$('fCat').value=x.cat;renderCircles();$('fAmt').value=x.amount;$('fNote').value=x.note||'';$('formTitle').classList.remove('hide');$('fSubmit').textContent='儲存修改';$('fCancel').classList.remove('hide');$('fDelete').classList.remove('hide');$('add').scrollIntoView({behavior:'smooth'});$('fAmt').focus({preventScroll:true});}
+  if(d.fdel){db.fixed=db.fixed.filter(f=>f.id!==d.fdel);run(store.meta());}
+  if(d.cdel){const c=db.cats[+d.cdel];if(!REQUIRED.includes(c)&&confirm(`刪除類別「${c}」？（既有記錄會保留）`)){db.cats.splice(+d.cdel,1);run(store.meta());}}
+  if(d.up&&+d.up>0){const i=+d.up;[db.cats[i-1],db.cats[i]]=[db.cats[i],db.cats[i-1]];run(store.meta());}
+  if(el.id==='signInBtn'&&window.cloudApi)window.cloudApi.signIn();
+  if(el.id==='signOutBtn'&&window.cloudApi&&confirm('確定登出？登出後會改回顯示這台裝置本機的資料。'))window.cloudApi.signOut();
+  if(d.rmember&&window.cloudApi&&confirm(`${d.rmember===cloud.email?'確定退出這本共用帳本？':`確定移除 ${d.rmember}？`}`))window.cloudApi.removeMember(d.rmember).catch(fail);
 });
+document.addEventListener('submit',e=>{if(e.target.id!=='memberForm')return;e.preventDefault();const m=$('memberEmail').value.trim().toLowerCase();if(m&&window.cloudApi)window.cloudApi.addMember(m).catch(fail);});
+document.addEventListener('change',e=>{if(e.target.id==='ledgerSel'&&window.cloudApi)window.cloudApi.switchLedger(e.target.value);});
 
 $('year').onchange=e=>{year=+e.target.value;resetForm();render();};
 $('lMonth').onchange=$('lCat').onchange=render;
 
-$('fixedForm').onsubmit=e=>{e.preventDefault();db.fixed.push({id:uid(),cat:$('xCat').value,amount:+$('xAmt').value,day:Math.min(28,Math.max(1,+$('xDay').value||1))});save();$('xAmt').value='';render();};
-function genMonth(m){let added=0;db.fixed.forEach(f=>{const date=`${year}-${pad(m)}-${pad(f.day)}`;
-  if(db.items.some(x=>x.fixedId===f.id&&x.date.slice(0,7)===date.slice(0,7)))return;
-  db.items.push({id:uid(),date,cat:f.cat,amount:f.amount,note:'固定支出',fixedId:f.id});added++;});return added;}
-$('genBtn').onclick=()=>{if(!db.fixed.length)return alert('請先加入固定支出');const n=genMonth(+$('genMonth').value);save();render();alert(n?`已新增 ${n} 筆`:'這個月已經產生過了');};
-$('genYear').onclick=()=>{if(!db.fixed.length)return alert('請先加入固定支出');if(!confirm(`為 ${year} 年 1–12 月全部產生固定支出？（已產生過的月份會略過）`))return;let n=0;for(let m=1;m<=12;m++)n+=genMonth(m);save();render();alert(`已新增 ${n} 筆`);};
+$('fixedForm').onsubmit=e=>{e.preventDefault();db.fixed.push({id:uid(),cat:$('xCat').value,amount:+$('xAmt').value,day:Math.min(28,Math.max(1,+$('xDay').value||1))});$('xAmt').value='';run(store.meta());};
+function genMonth(m){return db.fixed.filter(f=>!db.items.some(x=>x.fixedId===f.id&&x.date.slice(0,7)===`${year}-${pad(m)}`))
+  .map(f=>({id:uid(),date:`${year}-${pad(m)}-${pad(f.day)}`,cat:f.cat,amount:f.amount,note:'固定支出',fixedId:f.id}));}
+$('genBtn').onclick=()=>{if(!db.fixed.length)return alert('請先加入固定支出');const list=genMonth(+$('genMonth').value);run(store.add(list));alert(list.length?`已新增 ${list.length} 筆`:'這個月已經產生過了');};
+$('genYear').onclick=()=>{if(!db.fixed.length)return alert('請先加入固定支出');if(!confirm(`為 ${year} 年 1–12 月全部產生固定支出？（已產生過的月份會略過）`))return;const list=[];for(let m=1;m<=12;m++)list.push(...genMonth(m));run(store.add(list));alert(`已新增 ${list.length} 筆`);};
 
-$('catForm').onsubmit=e=>{e.preventDefault();const c=$('newCat').value.trim();if(c&&!db.cats.includes(c))db.cats.push(c);$('newCat').value='';save();render();};
+$('catForm').onsubmit=e=>{e.preventDefault();const c=$('newCat').value.trim();$('newCat').value='';if(c&&!db.cats.includes(c)){db.cats.push(c);run(store.meta());}};
 
 function download(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}
 $('exportCsv').onclick=()=>{const rows=[['日期','類別','金額','備註'],...yearItems().sort((a,b)=>a.date.localeCompare(b.date)).map(x=>[x.date,x.cat,x.amount,x.note||''])];
   download(`家庭支出_${year}.csv`,'﻿'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n'),'text/csv');};
 $('backup').onclick=()=>download(`家庭記帳備份_${todayStr}.json`,JSON.stringify(db,null,1),'application/json');
 $('restoreBtn').onclick=()=>$('restore').click();
-$('restore').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);if(!Array.isArray(d.items))throw 0;if(confirm(`還原備份（${d.items.length} 筆記錄）？目前資料將被取代。`)){db={cats:d.cats||DEFAULT_CATS.slice(),items:d.items,fixed:d.fixed||[],elecAsked:d.elecAsked};splitMeters();save();render();}}catch(_){alert('檔案格式不正確');}e.target.value='';});};
+$('restore').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{let d;try{d=JSON.parse(t);if(!Array.isArray(d.items))throw 0;}catch(_){alert('檔案格式不正確');return;}
+  if(confirm(`還原備份（${d.items.length} 筆記錄）？${store.cloud?'雲端帳本':'目前資料'}將被取代。`)){const prev=db;db={cats:d.cats||DEFAULT_CATS.slice(),items:d.items,fixed:d.fixed||[],elecAsked:d.elecAsked};splitMeters();const next=db;db=prev;run(store.replace(next));}}).finally(()=>{e.target.value='';});};
 
 $('navPen').innerHTML=svg('pen');$('phoneHome').innerHTML=svg('home');
-resetForm();render();
+resetForm();render();renderSync();
+</script>
+
+<script type="module">
+// ===== Firebase 雲端同步 =====
+const cfg=window.FIREBASE_CONFIG;
+if(cfg){
+  const V='10.12.2', base=`https://www.gstatic.com/firebasejs/${V}/`;
+  try{
+    const [{initializeApp},A,F]=await Promise.all([import(base+'firebase-app.js'),import(base+'firebase-auth.js'),import(base+'firebase-firestore.js')]);
+    const app=initializeApp(cfg), auth=A.getAuth(app);
+    let fs;try{fs=F.initializeFirestore(app,{localCache:F.persistentLocalCache({tabManager:F.persistentMultipleTabManager()})});}catch(e){fs=F.getFirestore(app);}
+    let unsubs=[], ledgerId=null, me=null, ledgers=[], meta={}, pending=false;
+    const clean=o=>Object.fromEntries(Object.entries(o).filter(([k,v])=>v!==undefined&&k!=='id'));
+    const ledgerRef=()=>F.doc(fs,'ledgers',ledgerId);
+    const itemRef=id=>F.doc(fs,'ledgers',ledgerId,'items',id);
+    async function batched(ops){for(let i=0;i<ops.length;i+=450){const b=F.writeBatch(fs);ops.slice(i,i+450).forEach(fn=>fn(b));await b.commit();}}
+    const writeItems=list=>batched(list.map(x=>b=>b.set(itemRef(x.id),clean(x))));
+    const publish=()=>cloudState({status:'on',email:me.email,owner:meta.owner,members:meta.members||[],ledgerId,ledgers,pending});
+
+    const impl={
+      add:list=>writeItems(list),
+      update:(id,rec)=>F.setDoc(itemRef(id),clean(rec),{merge:true}),
+      remove:ids=>batched(ids.map(id=>b=>b.delete(itemRef(id)))),
+      meta:()=>F.updateDoc(ledgerRef(),{cats:db.cats,fixed:db.fixed,elecAsked:!!db.elecAsked}),
+      replace:async d=>{await batched(db.items.map(x=>b=>b.delete(itemRef(x.id))));await writeItems(d.items);await F.updateDoc(ledgerRef(),{cats:d.cats,fixed:d.fixed,elecAsked:!!d.elecAsked});}
+    };
+
+    function stop(){unsubs.forEach(f=>f());unsubs=[];}
+    function listen(){
+      stop();store.cloud=impl;db={cats:db.cats,items:[],fixed:db.fixed};
+      unsubs.push(F.onSnapshot(ledgerRef(),s=>{meta=s.data()||{};db.cats=meta.cats||DEFAULT_CATS.slice();ensureRequired();db.fixed=meta.fixed||[];db.elecAsked=meta.elecAsked;publish();render();},onErr));
+      unsubs.push(F.onSnapshot(F.collection(fs,'ledgers',ledgerId,'items'),{includeMetadataChanges:true},s=>{db.items=s.docs.map(d=>({id:d.id,...d.data()}));pending=s.metadata.hasPendingWrites;publish();render();},onErr));
+    }
+    function onErr(e){console.error(e);stop();store.cloud=null;db=loadLocal();render();cloudState({status:'error',email:me&&me.email,msg:e.code==='permission-denied'?'你已不在這本帳本的共用成員中，或沒有存取權限。':e.message});}
+
+    async function connect(u){
+      const email=u.email;
+      const snap=await F.getDocs(F.query(F.collection(fs,'ledgers'),F.where('members','array-contains',email)));
+      ledgers=snap.docs.map(d=>({id:d.id,owner:d.data().owner}));
+      let created=false;
+      if(!ledgers.length){
+        const local=loadLocal();
+        await F.setDoc(F.doc(fs,'ledgers',u.uid),{owner:email,members:[email],cats:local.cats,fixed:local.fixed,elecAsked:!!local.elecAsked,createdAt:F.serverTimestamp()});
+        ledgers=[{id:u.uid,owner:email}];created=true;
+      }
+      let pref=null;try{pref=localStorage.getItem('family-ledger-choice');}catch(e){}
+      ledgerId=(ledgers.find(l=>l.id===pref)||ledgers.find(l=>l.owner!==email)||ledgers[0]).id;
+      // 這台裝置上的本機記錄：第一次連到這本帳本時上傳（以相同 id 寫入，重複上傳不會產生重複記錄）
+      const flag='family-ledger-uploaded-'+ledgerId;let done=false;try{done=!!localStorage.getItem(flag);}catch(e){}
+      const localItems=loadLocal().items;
+      if(!done&&localItems.length&&(created||confirm(`要把這台裝置上的 ${localItems.length} 筆記錄合併到雲端帳本嗎？\n（按「取消」則只使用雲端資料，本機資料仍保留在這台裝置）`)))await writeItems(localItems);
+      try{localStorage.setItem(flag,'1');}catch(e){}
+      listen();
+    }
+
+    window.cloudApi={
+      signIn:()=>A.signInWithPopup(auth,new A.GoogleAuthProvider()).catch(e=>{if(['auth/popup-blocked','auth/operation-not-supported-in-this-environment'].includes(e.code))return A.signInWithRedirect(auth,new A.GoogleAuthProvider());if(e.code!=='auth/popup-closed-by-user'&&e.code!=='auth/cancelled-popup-request')alert('登入失敗：'+e.message);}),
+      signOut:()=>A.signOut(auth),
+      addMember:m=>F.updateDoc(ledgerRef(),{members:F.arrayUnion(m)}),
+      removeMember:async m=>{await F.updateDoc(ledgerRef(),{members:F.arrayRemove(m)});if(m===me.email)location.reload();},
+      switchLedger:id=>{try{localStorage.setItem('family-ledger-choice',id);}catch(e){}ledgerId=id;listen();}
+    };
+
+    A.onAuthStateChanged(auth,async u=>{
+      stop();me=u;
+      if(!u){store.cloud=null;db=loadLocal();render();cloudState({status:'out'});return;}
+      cloudState({status:'loading'});
+      try{await connect(u);}catch(e){onErr(e);}
+    });
+  }catch(e){console.error(e);cloudState({status:'error',msg:'無法載入 Firebase：'+e.message});}
+}
 </script>
 </body>
 </html>
